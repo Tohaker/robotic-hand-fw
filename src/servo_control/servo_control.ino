@@ -8,14 +8,21 @@
   a serial connection to the Arduino, which can be 
   from a PC or Wifi Adapter.
 
-  Commands are as follows:
-   - 
+  This program accepts 8 bit commands with the following
+  format:
+  R R R H F F F F
+
+  R - Reserved bit
+  H - Hold bit: 0 to release finger, 1 to curl finger. Only applies
+      to fingers that have been selected.
+  F - Finger bit: 1 to select finger for an action, 0 to not select.
+      These can be stacked, so 0 0 0 1 would select the Thumb, and 
+      1 0 0 1 would select the Little finger AND Thumb.
 
   Written by Miles Bardon for the Open Source Robot Arm 
   project found at https://www.instructables.com/id/3D-Printed-Robotic-Arm-2/.
   BSD license, all text above must be included in any redistribution
  ****************************************************/
-
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
@@ -38,12 +45,13 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define MIDDLE 4
 #define LITTLE 6
 
-int data;
+int finger, hold, reserved;
 String inString = "";
 
 void setup() {
   pwm.begin();  
   pwm.setPWMFreq(50);  // Digital servos run at 50 Hz updates
+  pinMode(13, OUTPUT);
 
   Serial.begin(9600);
   Serial.println("Ready");
@@ -70,12 +78,14 @@ void loop() {
         rec = inString.toInt();
         parseData(rec);
         
-        Serial.println(constructMessage(cmd, data));  // Print what the Arduino received to check if they are identical.
+        Serial.println(constructMessage(finger, hold, reserved));  // Print what the Arduino received to check if they are identical.
 
         checkData();
 
         digitalWrite(13, HIGH); // Flashes to show a message was received.
-
+        delay(500);
+        digitalWrite(13, LOW);
+        
         inString = "";  // Reset the string to accept more data.
       }
     }
@@ -84,15 +94,30 @@ void loop() {
 
 void parseData(int rec) {
   if (rec <= 255) {
-    cmd = bitRead(rec, 0) | bitRead(rec, 1) << 1 | bitRead(rec, 2) << 2 | bitRead(rec, 3) << 3;
-    data = bitRead(rec, 4) | bitRead(rec, 5) << 1 | bitRead(rec, 6) << 2;
-    dir = bitRead(rec, 7);
+    finger = bitRead(rec, 0) | bitRead(rec, 1) << 1 | bitRead(rec, 2) << 2 | bitRead(rec, 3) << 3;
+    hold = bitRead(rec, 4);
+    reserved = bitRead(rec, 5) | bitRead(rec, 6) << 1 | bitRead(rec, 7) << 2;
   }
 }
 
 void checkData() {
-  if ((cmd >= 0) && (cmd <= 15) && (data >= 0) && (data <= 7))  // Makes sure the commands and data received are within specifed bounds.
+  if ((finger >= 0) && (finger <= 15) && (hold <= 1))  // Makes sure the commands and data received are within specifed bounds.
     carryOutCommand();
+}
+
+int constructMessage(int finger, int hold, int reserved) {
+  return finger | (hold << 4) | (reserved << 5);
+}
+
+void carryOutCommand() {
+  for (int i = 0; i < 4; i++) {
+    if (bitRead(finger, i) == 1) {
+      if (hold == 1)
+        pullBackSingleServo(i * 2);
+      else
+        homeSingleServo(i * 2);
+    }
+  }
 }
 
 void neutral() {
@@ -104,16 +129,32 @@ void neutral() {
 
 // These configurations are based entirely on the physical setup of your arm. 
 // Change the order if need be.
+void pullBackSingleServo(int port) {
+  if ((port == MIDDLE) || (port == INDEX)) {
+    pwm.setPWM(port, 0, SERVOMIN);
+  } else {
+    pwm.setPWM(port, 0, SERVOMAX);
+  }
+}
+
 void pullBackAllServos() {
-  pwm.setPWM(THUMB, 0, SERVOMIN);
-  pwm.setPWM(INDEX, 0, SERVOMIN);
-  pwm.setPWM(MIDDLE, 0, SERVOMAX);
-  pwm.setPWM(LITTLE, 0, SERVOMAX);
+  pullBackSingleServo(THUMB);
+  pullBackSingleServo(INDEX);
+  pullBackSingleServo(MIDDLE);
+  pullBackSingleServo(LITTLE);
+}
+
+void homeSingleServo(int port) {
+  if ((port == MIDDLE) || (port == INDEX)) {
+    pwm.setPWM(port, 0, SERVOMAX);
+  } else {
+    pwm.setPWM(port, 0, SERVOMIN);
+  }
 }
 
 void homeAllServos() {
-  pwm.setPWM(THUMB, 0, SERVOMAX);
-  pwm.setPWM(INDEX, 0, SERVOMAX);
-  pwm.setPWM(MIDDLE, 0, SERVOMIN);
-  pwm.setPWM(LITTLE, 0, SERVOMIN);
+  homeSingleServo(THUMB);
+  homeSingleServo(INDEX);
+  homeSingleServo(MIDDLE);
+  homeSingleServo(LITTLE);
 }
