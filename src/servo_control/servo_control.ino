@@ -1,7 +1,9 @@
 
 /*************************************************** 
   This is the control program for a Adafruit 16-channel 
-  PWM & Servo driver.
+  PWM & Servo driver. It includes code to accept commands
+  over both HTTP and USB Serial. If you wish to use Wifi
+  on a suitable board, uncomment "#define WIFI"
   
   This will drive 4 servos, each connected to a different 
   finger of the robotic arm. The control will come from
@@ -24,9 +26,18 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 #include <Wire.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include <Adafruit_PWMServoDriver.h>
+#define WIFI
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+
+#ifdef WIFI
+ESP8266WebServer server(80);
+#endif
 
 // Depending on your servo make, the pulse width min and max may vary, you 
 // want these to be as small/large as possible without hitting the hard stop
@@ -45,16 +56,56 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define MIDDLE 4
 #define LITTLE 6
 
+// Define your own local Wifi SSID and Password. The board will connect to the Wifi
+// if it can find it.
+#ifndef STASSID
+#define STASSID "your-ssid"
+#define STAPSK  "your-password"
+#endif
+
 int finger, hold, reserved;
 String inString = "";
+const char* ssid = STASSID;
+const char* password = STAPSK;
+const String host_name = "robothand";
 
 void setup() {
   pwm.begin();  
   pwm.setPWMFreq(50);  // Digital servos run at 50 Hz updates
   pinMode(13, OUTPUT);
 
-  Serial.begin(9600);
-  Serial.println("Ready");
+  Serial.begin(115200);
+  Serial.println("Serial connection ready");
+
+  #ifdef WIFI
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to: ");
+  Serial.println(ssid);
+  
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  Serial.println(""); 
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  if (MDNS.begin(host_name)) {
+    Serial.println("MDNS responder started");
+  }
+
+  server.on("/", handleRoot);
+  server.on("/move", handleFingerMovement);
+  server.onNotFound(handleNotFound);
+
+  server.begin();
+  Serial.println("HTTP server started");
+  #endif
 
   delay(10);
   homeAllServos(); // Start in the un-clenched position.
