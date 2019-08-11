@@ -1,18 +1,20 @@
 void handleRoot() {
+  Serial.println("got here");
   server.send(200, "application/json", "{ \"status\": \"operational\" }");
 }
 
 void handleNotFound() {
   String message = "{\n";
   message += "\"uri\": ";
-  message += "\"" + server.uri() + "\"";
+  message += "\"" + server.uri() + "\",";
   message += "\n\"method\": ";
-  message += "\"" + (server.method() == HTTP_GET) ? "GET\"" : "POST\"";
+  message += "\"" + (server.method() == HTTP_GET) ? "GET\"," : "POST\",";
   message += "\n\"arguments\": ";
-  message += "\"" + String(server.args()) + "\"\n";
+  message += "\"" + String(server.args()) + "\"";
   for (uint8_t i = 0; i < server.args(); i++) {
-    message += "\"" + server.argName(i) + "\": \"" + server.arg(i) + "\"\n";
+    message += "\n,\"" + server.argName(i) + "\": \"" + server.arg(i) + "\"";
   }
+  message += "}";
   server.send(404, "application/json", message);
 }
 
@@ -50,6 +52,6 @@ String constructJSON(int* fingers, bool hold) {
       fList += String(fingers[i]);
   }
   
-  String response = String("{\n\"fingers_moved\": " + fList + "\n\"held\": " + String(hold) + "}");
+  String response = String("{\n\"fingers_moved\": \"" + fList + "\",\n\"held\": \"" + String(hold) + "\"\n}");
   return response;
 }

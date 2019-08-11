@@ -25,42 +25,18 @@
   project found at https://www.instructables.com/id/3D-Printed-Robotic-Arm-2/.
   BSD license, all text above must be included in any redistribution
  ****************************************************/
+#include "config.h"
 #include <Wire.h>
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
 #include <Adafruit_PWMServoDriver.h>
-#define WIFI
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 #ifdef WIFI
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 ESP8266WebServer server(80);
-#endif
-
-// Depending on your servo make, the pulse width min and max may vary, you 
-// want these to be as small/large as possible without hitting the hard stop
-// for max range. You'll have to tweak them as necessary to match the servos you
-// have!
-#define SERVOMIN 150 // this is the 'minimum' pulse length count (out of 4096)
-#define SERVOHALFMIN 229
-#define SERVONEUTRAL 307
-#define SERVOHALFMAX 394
-#define SERVOMAX 480 // this is the 'maximum' pulse length count (out of 4096)
-
-// Define which pins your finger servos will be connected to. As there are 16 
-// pins on the board, I chose to space them out for ease of access.
-#define THUMB 0
-#define INDEX 2
-#define MIDDLE 4
-#define LITTLE 6
-
-// Define your own local Wifi SSID and Password. The board will connect to the Wifi
-// if it can find it.
-#ifndef STASSID
-#define STASSID "your-ssid"
-#define STAPSK  "your-password"
 #endif
 
 int finger, hold, reserved;
@@ -112,6 +88,11 @@ void setup() {
 }
 
 void loop() {
+  #ifdef WIFI
+  server.handleClient();
+  MDNS.update();
+  #endif
+  
   int rec;
   int CR = '\r';  // Carriage return
   int NL = '\n';  // New Line
